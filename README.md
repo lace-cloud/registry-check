@@ -19,7 +19,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: lace-cloud/registry-check@v1
 ```
 
@@ -31,8 +31,10 @@ on pushes to `main`.
 For each artifact directory the pull request changes, the action requires:
 
 - the manifest envelope keys (`apiVersion`, `axis`, `author`, `name`,
-  `version`, `displayName`, `runtime`) and an `axis` of `module`, `scanner`,
-  `handler` or `agent`;
+  `version`, `displayName`) and an `axis` of `module`, `scanner`, `handler` or
+  `agent`;
+- a `runtime` block on a scanner, handler or agent, and none on a module: a
+  module is Terraform a runner applies, so it has no runtime;
 - a bumped `version` when the manifest already exists on the base branch;
 - for a module, that `lace module validate` passes and the verdict is
   `already-lace-style`.

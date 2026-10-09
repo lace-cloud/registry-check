@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Checks the registry artifacts a pull request changes, with no credential:
 # each changed manifest.yaml's directory must carry the manifest envelope
-# keys and a known axis, must bump `version` when the manifest already
-# exists on the base branch, and — for a module — must validate in Lace
-# form. The registry still decides every publish; this catches what a
-# reviewer would otherwise find only after merge.
+# keys and a known axis, must declare `runtime` exactly when its axis runs
+# code (scanner, handler, agent; never a module), must bump `version` when
+# the manifest already exists on the base branch, and — for a module — must
+# validate in Lace form. The registry still decides every publish; this
+# catches what a reviewer would otherwise find only after merge.
 #
 # A module that calls modules from lace.cloud/ is not validated here:
 # validating it resolves those calls, which needs a registry credential a
@@ -62,7 +63,7 @@ check_one() {
   local d="$1" manifest key axis base_version head_version verdict rc problems=0 result="ok"
   manifest="${d}/manifest.yaml"
 
-  for key in apiVersion axis author name version displayName runtime; do
+  for key in apiVersion axis author name version displayName; do
     if ! grep -q "^${key}:" "$manifest"; then
       echo "::error file=${manifest}::${manifest} has no top-level '${key}:'." >&2
       problems=1
@@ -76,7 +77,20 @@ check_one() {
 
   axis="$(manifest_top_level axis < "$manifest")"
   case "$axis" in
-    module | scanner | handler | agent) ;;
+    module)
+      if grep -q '^runtime:' "$manifest"; then
+        echo "::error file=${manifest}::${manifest} is a module and declares 'runtime:'; a module has no runtime. Delete the block." >&2
+        problems=1
+        result="failed: module declares runtime"
+      fi
+      ;;
+    scanner | handler | agent)
+      if ! grep -q '^runtime:' "$manifest"; then
+        echo "::error file=${manifest}::${manifest} is a ${axis} and has no top-level 'runtime:'." >&2
+        problems=1
+        result="failed: no runtime"
+      fi
+      ;;
     *)
       echo "::error file=${manifest}::${manifest} declares axis '${axis}'; it must be one of module, scanner, handler, agent." >&2
       FAILED="${FAILED}${manifest}"$'\n'
