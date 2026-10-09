@@ -1,0 +1,24 @@
+name: Lace Registry Check
+description: Check the Lace registry artifacts a pull request changes, with no credential.
+
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  lace-version:
+    description: >-
+      The lace CLI release to check with, as vX.Y.Z. Empty uses the release
+      this version of the action was published with.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        LACE_VERSION: ${{ inputs.lace-version }}
+        EVENT_NAME: ${{ github.event_name }}
+        BASE: ${{ github.event.pull_request.base.sha }}
+      run: "${GITHUB_ACTION_PATH}/check.sh"
