@@ -16,7 +16,6 @@
 # registry view the token's own organization binding gives it.
 #
 # Inputs, from the action's env (action.yml maps them):
-#   LACE_VERSION   the lace release to check with; empty = the pin
 #   LACE_TOKEN     optional read-only service token; read by the lace CLI
 #   LACE_AUTH_URL  the Lace API the token belongs to; read by the lace CLI
 #   VISIBILITY     public | org_private (the registry's visibility): the view a lace.cloud/ module is

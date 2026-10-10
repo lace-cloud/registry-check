@@ -6,12 +6,6 @@ branding:
   color: blue
 
 inputs:
-  lace-version:
-    description: >-
-      The lace CLI release to check with, as vX.Y.Z. Empty uses the release
-      this version of the action was published with.
-    required: false
-    default: ''
   token:
     description: >-
       Optional. A read-only Lace service token with no publish scope, so the
@@ -42,7 +36,6 @@ runs:
         LACE_TOKEN: ${{ inputs.token }}
         LACE_AUTH_URL: ${{ inputs.api-url }}
         VISIBILITY: ${{ inputs.visibility }}
-        LACE_VERSION: ${{ inputs.lace-version }}
         EVENT_NAME: ${{ github.event_name }}
         BASE: ${{ github.event.pull_request.base.sha }}
       run: "${GITHUB_ACTION_PATH}/check.sh"
