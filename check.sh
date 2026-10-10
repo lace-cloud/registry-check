@@ -7,18 +7,35 @@
 # validate in Lace form. The registry still decides every publish; this
 # catches what a reviewer would otherwise find only after merge.
 #
-# A module that calls modules from lace.cloud/ is not validated here:
-# validating it resolves those calls, which needs a registry credential a
-# pull request does not hold. Its publish validates it.
+# A module that calls modules from lace.cloud/ resolves them when it
+# validates, which needs a registry credential. The block never holds the
+# publish token: it takes an optional read-only service token (no publish
+# scope) and the visibility the module publishes with. Without a token such a
+# module is skipped and its publish validates it; with one, `public`
+# validates as the public registry's view and `org_private` as the
+# registry view the token's own organization binding gives it.
 #
 # Inputs, from the action's env (action.yml maps them):
 #   LACE_VERSION   the lace release to check with; empty = the pin
+#   LACE_TOKEN     optional read-only service token; read by the lace CLI
+#   LACE_AUTH_URL  the Lace API the token belongs to; read by the lace CLI
+#   VISIBILITY     public | org_private (the registry's visibility): the view a lace.cloud/ module is
+#                  validated against
 #   EVENT_NAME, BASE (the pull request's base commit), GITHUB_SHA
 #
 # Every changed manifest is checked: a failure is recorded, the loop goes
 # on, and the step fails at the end naming each failed manifest.
 
 set -euo pipefail
+
+VISIBILITY="${VISIBILITY:-public}"
+case "$VISIBILITY" in
+  public | org_private) ;;
+  *)
+    echo "::error::registry-check: visibility must be 'public' or 'org_private', not '${VISIBILITY}'." >&2
+    exit 1
+    ;;
+esac
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=SCRIPTDIR/../lib/manifests.sh
@@ -111,12 +128,20 @@ check_one() {
   fi
 
   if [ "$axis" = module ]; then
+    calls_registry=0
     if grep -rqs --include='*.tf' 'source[[:space:]]*=[[:space:]]*"lace.cloud/' "$d"; then
-      echo "::notice file=${manifest}::${d} calls modules from lace.cloud/, which validating needs a registry credential to resolve. The check skips it; its publish validates it."
+      calls_registry=1
+    fi
+    if [ "$calls_registry" -eq 1 ] && [ -z "${LACE_TOKEN:-}" ]; then
+      echo "::notice file=${manifest}::${d} calls modules from lace.cloud/, which validating needs a registry credential to resolve. The check skips it; pass a read-only token to validate it here, or its publish validates it."
       [ "$problems" -eq 1 ] || result="ok (module validation skipped: calls lace.cloud/)"
     else
       set +e
-      lace module validate --path "$d"
+      if [ "$calls_registry" -eq 1 ] && [ "$VISIBILITY" = public ]; then
+        lace module validate --view public --path "$d"
+      else
+        lace module validate --path "$d"
+      fi
       rc=$?
       set -e
       if [ "$rc" -ne 0 ]; then

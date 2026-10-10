@@ -1,7 +1,7 @@
 # Lace Registry Check
 
 A GitHub Action that checks the [Lace](https://lace.cloud) registry artifacts a
-pull request changes, with no credential. It is published from the Lace
+pull request changes, without a publish credential. It is published from the Lace
 monorepo; changes are made there, not here.
 
 Add `.github/workflows/check.yml` to the repository that holds your
@@ -39,9 +39,10 @@ For each artifact directory the pull request changes, the action requires:
 - for a module, that `lace module validate` passes and the verdict is
   `already-lace-style`.
 
-A module that calls modules from `lace.cloud/` is not validated: that needs a
-registry credential a pull request does not hold, and its publish validates
-it. The check reports a notice and skips it.
+A module that calls modules from `lace.cloud/` needs a registry credential to
+validate. Without a `token` the check reports a notice and skips it, and its
+publish validates it. With a `token`, the check validates it as the registry
+view its `visibility` names.
 
 Every changed manifest is checked. A failure is recorded, the action goes on to
 the next manifest, and the step fails at the end naming each failed one. The
@@ -52,11 +53,36 @@ job summary holds a table of every manifest, its axis and its result.
 | Input | Default | |
 |---|---|---|
 | `lace-version` | the release this version of the action was published with | The `lace` release to check with, as `vX.Y.Z`. |
+| `token` | none | Optional. A read-only service token with no publish scope. |
+| `visibility` | `public` | `public` or `org_private`: the registry visibility the module publishes with, which selects the view a module that calls `lace.cloud/` modules is validated against. |
+| `api-url` | `https://lace.cloud` | The Lace API the token belongs to. |
+
+`visibility: public` validates against the public registry only, which is what
+a public module's publish resolves its children against, so a private child is
+refused naming it. `visibility: org_private` validates as the registry view the
+token's own organization binding gives it, which is what an
+organization-private publish resolves against. The `token` must be an org
+service token with no publish scope; the API refuses a user API key that names
+no organization. Set `visibility` to the visibility the module publishes with.
+
+The `token` must carry no publish scope. Never pass the publish token to this
+action: it runs on `pull_request`, where the pull request's Terraform could
+read it. The CLI keeps the token out of Terraform's environment, but the check
+should still not hold a credential that can publish.
+
+```yaml
+      - uses: lace-cloud/registry-check@v1
+        with:
+          token: ${{ secrets.LACE_READ_TOKEN }}
+          visibility: public
+```
 
 ## Requirements
 
 - The action runs on `pull_request` and refuses every other event. It takes no
-  token and no secret, and fork pull requests are checked the same way.
+  token by default, and fork pull requests are checked the same way. A fork
+  pull request does not receive repository secrets, so a module that calls
+  `lace.cloud/` is skipped there.
 - It fetches the pull request's base commit itself, so the default shallow
   checkout is enough; leave `persist-credentials` at its default so it can.
   When it cannot fetch the base it fails, naming the cause.

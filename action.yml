@@ -1,5 +1,5 @@
 name: Lace Registry Check
-description: Check the Lace registry artifacts a pull request changes, with no credential.
+description: Check the Lace registry artifacts a pull request changes, with no publish credential.
 
 branding:
   icon: check-circle
@@ -12,12 +12,36 @@ inputs:
       this version of the action was published with.
     required: false
     default: ''
+  token:
+    description: >-
+      Optional. A read-only Lace service token with no publish scope, so the
+      check can validate a module that calls modules from lace.cloud/. Never
+      pass the publish token: a pull request's Terraform could read it.
+    required: false
+    default: ''
+  visibility:
+    description: >-
+      public or org_private: the registry visibility the module publishes
+      with, which selects the view a module that calls lace.cloud/ modules
+      is validated against. org_private validates as the registry view
+      the token's own organization binding gives it, so the token must be an
+      org service token with no publish scope; the API refuses a user API key
+      that names no organization.
+    required: false
+    default: public
+  api-url:
+    description: The Lace API the token belongs to.
+    required: false
+    default: https://lace.cloud
 
 runs:
   using: composite
   steps:
     - shell: bash
       env:
+        LACE_TOKEN: ${{ inputs.token }}
+        LACE_AUTH_URL: ${{ inputs.api-url }}
+        VISIBILITY: ${{ inputs.visibility }}
         LACE_VERSION: ${{ inputs.lace-version }}
         EVENT_NAME: ${{ github.event_name }}
         BASE: ${{ github.event.pull_request.base.sha }}
