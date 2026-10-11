@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Checks the registry artifacts a pull request changes, with no credential:
-# each changed manifest.yaml's directory must carry the manifest envelope
-# keys and a known axis, must declare `runtime` exactly when its axis runs
-# code (scanner, handler, agent; never a module), must bump `version` when
-# the manifest already exists on the base branch, and — for a module — must
-# validate in Lace form. The registry still decides every publish; this
-# catches what a reviewer would otherwise find only after merge.
+# Checks the registry artifacts a pull request changes, with no publish
+# credential: each changed manifest.yaml and its README go through
+# `lace registry validate`, the validator the registry's publish runs, so the
+# check refuses exactly what a publish refuses for the manifest's content. A
+# manifest must also bump `version` when it already exists on the base branch,
+# and a module must validate in Lace form. What depends on who publishes or on
+# what the registry already holds is decided only by the publish; README.md
+# lists it.
 #
 # A module that calls modules from lace.cloud/ resolves them when it
 # validates, which needs a registry credential. The block never holds the
@@ -76,44 +77,23 @@ FAILED=""
 # check_one <dir> — records whether the directory passes and lets the loop
 # go on to the next one.
 check_one() {
-  local d="$1" manifest key axis base_version head_version verdict rc problems=0 result="ok"
+  local d="$1" manifest axis readme base_version head_version verdict rc problems=0 result="ok"
   manifest="${d}/manifest.yaml"
-
-  for key in apiVersion axis author name version displayName; do
-    if ! grep -q "^${key}:" "$manifest"; then
-      echo "::error file=${manifest}::${manifest} has no top-level '${key}:'." >&2
-      problems=1
-    fi
-  done
-  if [ "$problems" -eq 1 ]; then
-    FAILED="${FAILED}${manifest}"$'\n'
-    manifest_summary_row "$manifest" "?" "failed: missing envelope key"
-    return 0
-  fi
-
   axis="$(manifest_top_level axis < "$manifest")"
-  case "$axis" in
-    module)
-      if grep -q '^runtime:' "$manifest"; then
-        echo "::error file=${manifest}::${manifest} is a module and declares 'runtime:'; a module has no runtime. Delete the block." >&2
-        problems=1
-        result="failed: module declares runtime"
-      fi
-      ;;
-    scanner | handler | agent)
-      if ! grep -q '^runtime:' "$manifest"; then
-        echo "::error file=${manifest}::${manifest} is a ${axis} and has no top-level 'runtime:'." >&2
-        problems=1
-        result="failed: no runtime"
-      fi
-      ;;
-    *)
-      echo "::error file=${manifest}::${manifest} declares axis '${axis}'; it must be one of module, scanner, handler, agent." >&2
-      FAILED="${FAILED}${manifest}"$'\n'
-      manifest_summary_row "$manifest" "$axis" "failed: unknown axis"
-      return 0
-      ;;
-  esac
+  readme="$(manifest_readme "$d")"
+
+  # The refusal's message is the CLI's own and sits in the log above the
+  # annotation. The invocation stands on its own line so its argv is checked
+  # against the command tree.
+  set +e
+  lace registry validate --axis "$axis" --manifest "$manifest" --readme "$readme"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    echo "::error file=${manifest}::${manifest} was refused by the registry validator (exit ${rc}); the CLI's message is in the log above." >&2
+    problems=1
+    result="failed: registry validate exited ${rc}"
+  fi
 
   if git cat-file -e "${BASE}:${manifest}" 2>/dev/null; then
     git show "${BASE}:${manifest}" > "$BASE_MANIFEST"

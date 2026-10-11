@@ -24,7 +24,9 @@ inputs:
     required: false
     default: public
   api-url:
-    description: The Lace API the token belongs to.
+    description: >-
+      The Lace API the token belongs to, and the one whose validator each
+      changed manifest is checked against.
     required: false
     default: https://lace.cloud
 
