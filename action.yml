@@ -8,25 +8,26 @@ branding:
 inputs:
   token:
     description: >-
-      Optional. A read-only Lace service token with no publish scope, so the
-      check can validate a module that calls modules from lace.cloud/. Never
-      pass the publish token: a pull request's Terraform could read it.
+      A read-only Lace service token of the publishing organization
+      (registry:read, no publish scope). Required for visibility org_private,
+      where the check reads the organization's private registry; a public
+      check needs none and sends none. Never pass the publish token: a pull
+      request's Terraform could read it.
     required: false
     default: ''
   visibility:
     description: >-
-      public or org_private: the registry visibility the module publishes
-      with, which selects the view a module that calls lace.cloud/ modules
-      is validated against. org_private validates as the registry view
-      the token's own organization binding gives it, so the token must be an
-      org service token with no publish scope; the API refuses a user API key
-      that names no organization.
+      public or org_private: the registry visibility the manifests publish
+      with. public asks the public registry, with no credential, which
+      versions it holds and validates each module's lace.cloud/ children as
+      the public registry resolves them, so an org-private child is refused.
+      org_private asks as the token's organization and needs the token input.
     required: false
     default: public
   api-url:
     description: >-
-      The Lace API the token belongs to, and the one whose validator each
-      changed manifest is checked against.
+      The Lace API whose registry and validator each changed manifest is
+      checked against, and the one the token belongs to.
     required: false
     default: https://lace.cloud
 
