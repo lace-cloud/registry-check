@@ -153,7 +153,7 @@ check_one() {
     else
       verdict="$(jq -r .verdict "${d}/.lace/verdict.json")"
       if [ "$verdict" != already-lace-style ]; then
-        echo "::error file=${manifest}::${d} validates as '${verdict}', not already-lace-style. Run lace module convert, then lace module validate." >&2
+        echo "::error file=${manifest}::${d} validates as '${verdict}', not already-lace-style; the lace module validate report above names why and what resolves it." >&2
         problems=1
         result="failed: verdict ${verdict}"
       fi
