@@ -89,11 +89,12 @@ action: it runs on `pull_request`, where the pull request's Terraform could
 read it. The CLI keeps every Lace credential out of Terraform's environment,
 but the check should still not hold a credential that can publish.
 
-A public check cannot see an org-private module. A module's identity names no
-visibility, so a module your organization already published privately at the
-same `<author>/<name>` and version passes a public check and is refused at
-publish: `409 conflict`, or `visibility_mismatch` when the content is
-byte-identical. Publish it under a new version.
+A public check cannot see an org-private artifact. An artifact's identity
+(module, scanner, handler or agent) names no visibility, so one your
+organization already published privately at the same `<axis>/<author>/<name>`
+and version passes a public check and is refused at publish: `409 conflict`,
+or `409 visibility_mismatch` when the content is byte-identical. Publish it
+under a new version.
 
 ## Inputs
 
