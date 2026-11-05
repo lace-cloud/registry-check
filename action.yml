@@ -21,7 +21,8 @@ inputs:
       with. public asks the public registry, with no credential, which
       versions it holds and validates each module's lace.cloud/ children as
       the public registry resolves them, so an org-private child is refused.
-      org_private asks as the token's organization and needs the token input.
+      org_private checks the author against the token's organization before
+      asking for held versions and needs the token input.
     required: false
     default: public
   api-url:

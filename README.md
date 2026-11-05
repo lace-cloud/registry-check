@@ -96,6 +96,12 @@ and version passes a public check and is refused at publish: `409 conflict`,
 or `409 visibility_mismatch` when the content is byte-identical. Publish it
 under a new version.
 
+An org-private check validates each manifest with the read token's bound
+organization before looking up held versions. Its author must match that
+organization's slug; otherwise the check reports the publish's `scope_missing`
+refusal and the author remedy. A locally selected organization cannot change
+this check. An in-tree runtime cannot publish privately.
+
 ## Inputs
 
 | Input | Default | |

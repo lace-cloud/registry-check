@@ -124,7 +124,7 @@ check_one() {
   # The refusal's message is the CLI's own and sits in the log above the
   # annotation.
   set +e
-  lace registry validate --axis "$axis" --manifest "$manifest" --readme "$readme"
+  lace registry validate --visibility "$VISIBILITY" --axis "$axis" --manifest "$manifest" --readme "$readme"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
