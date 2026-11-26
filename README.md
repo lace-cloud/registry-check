@@ -38,10 +38,16 @@ For each artifact directory the pull request changes, the action requires:
 - that it carries a version the registry does not hold. A changed directory
   must carry a version the registry does not hold: the check asks the
   registry, with `lace registry get`, which versions of the manifest's
-  `<axis>/<author>/<name>` it holds, and refuses one it already holds — a
-  version published before, a version a branch reverted to, whatever the base
-  branch declares. A version the base branch declares but the registry never
-  published passes;
+  identity it holds, and refuses one it already holds — a version published
+  before, a version a branch reverted to, whatever the base branch declares. A
+  version the base branch declares but the registry never published passes.
+  The identity and the version are the ones `lace registry validate` read from
+  the manifest, the publish's own reading of its YAML in any style it accepts.
+  A module's identity is its `author`, `name` and `bundle.system`, its address
+  `lace.cloud/<author>/<name>/<system>`, and each system has its own versions,
+  so the check asks for the module at its system,
+  `module/<author>/<name>/<system>`; every other axis's identity is its
+  `<axis>/<author>/<name>`;
 - for a module, that `lace module validate` passes and the verdict is
   `already-lace-style`, resolving each `lace.cloud/` child as the module's
   audience does (below). A module whose child its audience cannot see fails,
@@ -91,8 +97,8 @@ but the check should still not hold a credential that can publish.
 
 A public check cannot see an org-private artifact. An artifact's identity
 (module, scanner, handler or agent) names no visibility, so one your
-organization already published privately at the same `<axis>/<author>/<name>`
-and version passes a public check and is refused at publish: `409 conflict`,
+organization already published privately at the same identity and version
+passes a public check and is refused at publish: `409 conflict`,
 or `409 visibility_mismatch` when the content is byte-identical. Publish it
 under a new version.
 

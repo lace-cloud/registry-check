@@ -7,7 +7,11 @@
 #     a publish refuses for the manifest's content;
 #   - it must carry a version the registry does not hold: `lace registry get`
 #     asks the registry which versions of the manifest's identity it holds,
-#     and a held one is refused, whatever the base branch declares;
+#     and a held one is refused, whatever the base branch declares. The
+#     identity and version are the ones the validator read from the manifest
+#     (its `-o json` answer), the publish's own parse. A module's identity is
+#     its author, name and system (bundle.system), each system with its own
+#     versions; any other axis's is its axis, author and name;
 #   - a module must validate in Lace form with `lace module validate`,
 #     resolving its lace.cloud/ children as its publication's audience does.
 #
@@ -75,39 +79,66 @@ install_lace
 
 FAILED=""
 
-# version_unheld <manifest> <axis> — prints nothing and succeeds when the
-# registry holds no version of the manifest's identity at its version;
-# otherwise prints the summary result and annotates the manifest. The
-# registry is asked as the audience reads it: the public registry with no
-# credential, or the organization the manifest's author names (a manifest
-# publishes only under its own organization's slug) with the token.
+# version_unheld <manifest> <validated> — prints nothing and succeeds when
+# the registry holds no version of the release the validator accepted;
+# otherwise prints the summary result and annotates the manifest. <validated>
+# is the manifest's `lace registry validate -o json` answer, the release the
+# publish would publish as the server parsed the manifest: its axis, author,
+# name, version and, for a module, system (null on every other axis), so
+# the identity asked for is the publish's whatever the YAML's style
+# (`bundle: {system: aws}` reads as a block does: a node's style "is a
+# presentation detail and is not reflected in the serialization tree or
+# representation graph", https://yaml.org/spec/1.2.2/#3231-node-styles).
+# A module is asked for as
+# module/<author>/<name>/<system> and named by its address,
+# lace.cloud/<author>/<name>/<system>; any other axis is asked for and named
+# as <axis>/<author>/<name>. The registry is asked as the audience reads it:
+# the public registry with no credential, or the organization the manifest's
+# author names (a manifest publishes only under its own organization's slug)
+# with the token.
 version_unheld() {
-  local manifest="$1" axis="$2" author name version answer rc held
-  author="$(manifest_top_level author < "$manifest")"
-  name="$(manifest_top_level name < "$manifest")"
-  version="$(manifest_top_level version < "$manifest")"
+  local manifest="$1" validated="$2" axis author name version system artifact identity answer rc held
+  # jq -e exits 1 when its last output is false or null
+  # (https://jqlang.org/manual/v1.7/#invoking-jq, --exit-status), so a
+  # missing field, or a module's null system, is an answer naming no release.
+  if ! axis="$(printf '%s' "$validated" | jq -er .axis)" \
+    || ! author="$(printf '%s' "$validated" | jq -er .author)" \
+    || ! name="$(printf '%s' "$validated" | jq -er .name)" \
+    || ! version="$(printf '%s' "$validated" | jq -er .version)" \
+    || { [ "$axis" = module ] && ! system="$(printf '%s' "$validated" | jq -er .system)"; }; then
+    printf '%s\n' "$validated" >&2
+    echo "::error file=${manifest}::the registry validator's answer for ${manifest}, in the log above, names no release the check can read." >&2
+    echo "failed: unreadable validate answer"
+    return 1
+  fi
+  artifact="${axis}/${author}/${name}"
+  identity="$artifact"
+  if [ "$axis" = module ]; then
+    artifact="module/${author}/${name}/${system}"
+    identity="lace.cloud/${author}/${name}/${system}"
+  fi
   # Each invocation is the whole of its line, so its argv is checked against
   # the command tree.
   set +e
   if [ "$VISIBILITY" = public ]; then
-    answer="$(lace registry get --view public -o json "${axis}/${author}/${name}")"
+    answer="$(lace registry get --view public -o json "$artifact")"
   else
-    answer="$(lace registry get --org "$author" -o json "${axis}/${author}/${name}")"
+    answer="$(lace registry get --org "$author" -o json "$artifact")"
   fi
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
-    echo "::error file=${manifest}::the registry could not be asked which versions of ${axis}/${author}/${name} it holds: the read exited ${rc}, and the CLI's message is in the log above." >&2
+    echo "::error file=${manifest}::the registry could not be asked which versions of ${identity} it holds: the read exited ${rc}, and the CLI's message is in the log above." >&2
     echo "failed: registry read exited ${rc}"
     return 1
   fi
   if ! held="$(printf '%s' "$answer" | jq -r --arg v "$version" 'any(.versions[]; .version == $v)')"; then
-    echo "::error file=${manifest}::the registry's answer for ${axis}/${author}/${name} could not be read." >&2
+    echo "::error file=${manifest}::the registry's answer for ${identity} could not be read." >&2
     echo "failed: unreadable registry answer"
     return 1
   fi
   if [ "$held" = true ]; then
-    echo "::error file=${manifest}::$(dirname "$manifest") changed but ${manifest} declares version ${version}, which the registry already holds. A changed directory must carry a version the registry does not hold." >&2
+    echo "::error file=${manifest}::$(dirname "$manifest") changed but ${manifest} declares version ${version} of ${identity}, which the registry already holds. A changed directory must carry a version the registry does not hold." >&2
     echo "failed: version ${version} already published"
     return 1
   fi
@@ -116,15 +147,17 @@ version_unheld() {
 # check_one <dir> — records whether the directory passes and lets the loop
 # go on to the next one.
 check_one() {
-  local d="$1" manifest axis readme verdict rc problems=0 result="ok" refusal
+  local d="$1" manifest axis readme validated verdict rc problems=0 result="ok" refusal
   manifest="${d}/manifest.yaml"
   axis="$(manifest_top_level axis < "$manifest")"
   readme="$(manifest_readme "$d")"
 
   # The refusal's message is the CLI's own and sits in the log above the
-  # annotation.
+  # annotation: under -o json the CLI reports to stderr, and writes to stdout
+  # its answer, the release it accepted, or on a refusal the failure
+  # document, which the check does not read.
   set +e
-  lace registry validate --visibility "$VISIBILITY" --axis "$axis" --manifest "$manifest" --readme "$readme"
+  validated="$(lace registry validate --visibility "$VISIBILITY" --axis "$axis" --manifest "$manifest" --readme "$readme" -o json)"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
@@ -133,7 +166,7 @@ check_one() {
     result="failed: registry validate exited ${rc}"
   # The identity the version is asked under is the one the validator just
   # accepted.
-  elif ! refusal="$(version_unheld "$manifest" "$axis")"; then
+  elif ! refusal="$(version_unheld "$manifest" "$validated")"; then
     problems=1
     result="$refusal"
   fi
